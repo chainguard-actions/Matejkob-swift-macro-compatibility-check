@@ -1,0 +1,44 @@
+name: Test basic usage (defaults)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift
+        run: |
+          mkdir -p /tmp/fake-swift/bin
+          rm -f /tmp/fake-swift/calls.log /tmp/fake-swift/current
+          cat > /tmp/fake-swift/bin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/fake-swift/calls.log
+          if [ "$1" = package ] && [ "$2" = resolve ] && [ "$3" = swift-syntax ]; then
+            echo "$5" > /tmp/fake-swift/current
+          fi
+          cur="$(cat /tmp/fake-swift/current 2>/dev/null)"
+          if [ "$1" = build ] && [ -n "$FAKE_FAIL_BUILD" ] && [ "$cur" = "$FAKE_FAIL_BUILD" ]; then exit 1; fi
+          if [ "$1" = test ] && [ -n "$FAKE_FAIL_TEST" ] && [ "$cur" = "$FAKE_FAIL_TEST" ]; then exit 1; fi
+          exit 0
+          EOF
+          chmod +x /tmp/fake-swift/bin/swift
+          echo "/tmp/fake-swift/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+      - name: Assert swift invocations
+        run: |
+          LOG=/tmp/fake-swift/calls.log
+          cat "$LOG"
+          resolves=$(grep -c '^package resolve swift-syntax --version ' "$LOG" || true)
+          builds=$(grep -c '^build' "$LOG" || true)
+          tests=$(grep -c '^test' "$LOG" || true)
+          echo "resolves=$resolves builds=$builds tests=$tests"
+          [ "$(head -n1 "$LOG")" = "package resolve" ] || { echo "FAIL: first call should be 'package resolve'"; exit 1; }
+          [ "$resolves" = "8" ] || { echo "FAIL: expected 8 version resolves"; exit 1; }
+          [ "$builds" = "8" ] || { echo "FAIL: expected 8 builds"; exit 1; }
+          [ "$tests" = "0" ] || { echo "FAIL: expected no tests by default"; exit 1; }
+          if grep -q -- '-v' <(grep '^build' "$LOG"); then echo "FAIL: verbose flag unexpectedly used"; exit 1; fi
+          for v in 509.0.0 509.0.1 509.0.2 509.1.0 509.1.1 510.0.0 510.0.1 510.0.2; do
+            grep -qx "package resolve swift-syntax --version $v" "$LOG" || { echo "FAIL: missing version $v"; exit 1; }
+          done
+          echo "PASS"

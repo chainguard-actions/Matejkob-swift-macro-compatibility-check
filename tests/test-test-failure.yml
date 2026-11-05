@@ -1,0 +1,41 @@
+name: Test swift test failure fails the check
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift (fails tests on 510.0.0)
+        run: |
+          mkdir -p /tmp/fake-swift/bin
+          rm -f /tmp/fake-swift/calls.log /tmp/fake-swift/current
+          cat > /tmp/fake-swift/bin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/fake-swift/calls.log
+          if [ "$1" = package ] && [ "$2" = resolve ] && [ "$3" = swift-syntax ]; then
+            echo "$5" > /tmp/fake-swift/current
+          fi
+          cur="$(cat /tmp/fake-swift/current 2>/dev/null)"
+          if [ "$1" = test ] && [ "$cur" = "510.0.0" ]; then exit 1; fi
+          exit 0
+          EOF
+          chmod +x /tmp/fake-swift/bin/swift
+          echo "/tmp/fake-swift/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          run-tests: 'true'
+          major-versions-only: 'true'
+      - name: Assert action failed on test failure
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          LOG=/tmp/fake-swift/calls.log
+          cat "$LOG"
+          echo "outcome: $OUTCOME"
+          [ "$OUTCOME" = "failure" ] || { echo "FAIL: expected failure outcome"; exit 1; }
+          tests=$(grep -c '^test' "$LOG" || true)
+          [ "$tests" = "2" ] || { echo "FAIL: expected 2 test invocations, got $tests"; exit 1; }
+          echo "PASS"

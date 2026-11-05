@@ -1,0 +1,35 @@
+name: Test run-tests with verbose
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift
+        run: |
+          mkdir -p /tmp/fake-swift/bin
+          rm -f /tmp/fake-swift/calls.log /tmp/fake-swift/current
+          cat > /tmp/fake-swift/bin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/fake-swift/calls.log
+          exit 0
+          EOF
+          chmod +x /tmp/fake-swift/bin/swift
+          echo "/tmp/fake-swift/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          run-tests: 'true'
+          verbose: 'true'
+          major-versions-only: 'true'
+      - name: Assert builds and tests ran verbosely
+        run: |
+          LOG=/tmp/fake-swift/calls.log
+          cat "$LOG"
+          vbuilds=$(grep -cx 'build -v' "$LOG" || true)
+          vtests=$(grep -cx 'test -v' "$LOG" || true)
+          echo "verbose builds=$vbuilds verbose tests=$vtests"
+          [ "$vbuilds" = "2" ] || { echo "FAIL: expected 2 'build -v'"; exit 1; }
+          [ "$vtests" = "2" ] || { echo "FAIL: expected 2 'test -v'"; exit 1; }
+          echo "PASS"
