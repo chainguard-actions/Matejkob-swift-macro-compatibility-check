@@ -8,6 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit | Hardening report |
 |---------|-----|-----------------|------------------|
+| v0.1.0 | [`v0.1.0`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/tree/v0.1.0) | [`170995c`](https://github.com/Matejkob/swift-macro-compatibility-check/commit/170995ce32cacc7b56a8c54266653953a9b0a302) | [`HARDENING.md`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/blob/v0.1.0/HARDENING.md) |
 | v1.0.0 | [`v1.0.0`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/tree/v1.0.0) | [`25b8ad0`](https://github.com/Matejkob/swift-macro-compatibility-check/commit/25b8ad08ae7016db2b12fcbf63bece92b58310ee) | [`HARDENING.md`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/blob/v1.0.0/HARDENING.md) |
 | v1.0.1 | [`v1.0.1`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/tree/v1.0.1) | [`04caea6`](https://github.com/Matejkob/swift-macro-compatibility-check/commit/04caea6bb1f0b43c40d882bdf786a4d445462749) | [`HARDENING.md`](https://github.com/chainguard-actions/Matejkob-swift-macro-compatibility-check/blob/v1.0.1/HARDENING.md) |
 
