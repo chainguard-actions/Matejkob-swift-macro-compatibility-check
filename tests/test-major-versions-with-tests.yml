@@ -1,0 +1,43 @@
+name: Test major versions only with tests
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift on PATH
+        run: |
+          mkdir -p /tmp/fakebin
+          rm -f /tmp/swift-calls.log /tmp/swift-current-version
+          cat > /tmp/fakebin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/swift-calls.log
+          if [ "$1" = "package" ] && [ "$2" = "resolve" ] && [ "$3" = "swift-syntax" ]; then
+            echo "$5" > /tmp/swift-current-version
+          fi
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/swift
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          run-tests: 'true'
+          major-versions-only: 'true'
+      - name: Assert swift invocations
+        run: |
+          echo "--- swift calls ---"; cat /tmp/swift-calls.log
+          fail=0
+          n=$(grep -c '^package resolve swift-syntax --version ' /tmp/swift-calls.log); echo "version resolves: $n"
+          [ "$n" = "3" ] || { echo "FAIL: expected 3 version resolves"; fail=1; }
+          for v in 509.0.0 510.0.0 600.0.0; do
+            grep -qx "package resolve swift-syntax --version $v" /tmp/swift-calls.log || { echo "FAIL: missing $v"; fail=1; }
+          done
+          if grep -q 'version 509.0.1' /tmp/swift-calls.log; then echo "FAIL: minor version used"; fail=1; fi
+          n=$(grep -cx 'build' /tmp/swift-calls.log); echo "builds: $n"
+          [ "$n" = "3" ] || { echo "FAIL: expected 3 builds"; fail=1; }
+          n=$(grep -cx 'test' /tmp/swift-calls.log); echo "tests: $n"
+          [ "$n" = "3" ] || { echo "FAIL: expected 3 test runs"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"

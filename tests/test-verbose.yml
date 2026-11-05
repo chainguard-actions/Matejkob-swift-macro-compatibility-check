@@ -1,0 +1,36 @@
+name: Test verbose output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift on PATH
+        run: |
+          mkdir -p /tmp/fakebin
+          rm -f /tmp/swift-calls.log
+          cat > /tmp/fakebin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/swift-calls.log
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/swift
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          verbose: 'true'
+          run-tests: 'true'
+          major-versions-only: 'true'
+      - name: Assert verbose flag passed
+        run: |
+          echo "--- swift calls ---"; cat /tmp/swift-calls.log
+          fail=0
+          n=$(grep -cx 'build -v' /tmp/swift-calls.log); echo "verbose builds: $n"
+          [ "$n" = "3" ] || { echo "FAIL: expected 3 'build -v'"; fail=1; }
+          n=$(grep -cx 'test -v' /tmp/swift-calls.log); echo "verbose tests: $n"
+          [ "$n" = "3" ] || { echo "FAIL: expected 3 'test -v'"; fail=1; }
+          if grep -qx 'build' /tmp/swift-calls.log; then echo "FAIL: non-verbose build"; fail=1; fi
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"

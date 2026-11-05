@@ -1,0 +1,45 @@
+name: Test basic usage (defaults)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift on PATH
+        run: |
+          mkdir -p /tmp/fakebin
+          rm -f /tmp/swift-calls.log /tmp/swift-current-version
+          cat > /tmp/fakebin/swift <<'EOF'
+          #!/bin/bash
+          echo "$*" >> /tmp/swift-calls.log
+          if [ "$1" = "package" ] && [ "$2" = "resolve" ] && [ "$3" = "swift-syntax" ]; then
+            echo "$5" > /tmp/swift-current-version
+            if [ -n "$FAIL_RESOLVE_VERSION" ] && [ "$5" = "$FAIL_RESOLVE_VERSION" ]; then exit 1; fi
+          fi
+          CUR="$(cat /tmp/swift-current-version 2>/dev/null)"
+          if [ "$1" = "build" ] && [ -n "$FAIL_BUILD_VERSION" ] && [ "$CUR" = "$FAIL_BUILD_VERSION" ]; then exit 1; fi
+          if [ "$1" = "test" ] && [ -n "$FAIL_TEST_VERSION" ] && [ "$CUR" = "$FAIL_TEST_VERSION" ]; then exit 1; fi
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/swift
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+      - name: Assert swift invocations
+        run: |
+          echo "--- swift calls ---"; cat /tmp/swift-calls.log
+          fail=0
+          n=$(grep -cx 'package resolve' /tmp/swift-calls.log); echo "bare resolve: $n"
+          [ "$n" = "1" ] || { echo "FAIL: expected 1 bare resolve"; fail=1; }
+          n=$(grep -c '^package resolve swift-syntax --version ' /tmp/swift-calls.log); echo "version resolves: $n"
+          [ "$n" = "10" ] || { echo "FAIL: expected 10 version resolves"; fail=1; }
+          for v in 509.0.0 509.0.1 509.0.2 509.1.0 509.1.1 510.0.0 510.0.1 510.0.2 510.0.3 600.0.0; do
+            grep -qx "package resolve swift-syntax --version $v" /tmp/swift-calls.log || { echo "FAIL: missing $v"; fail=1; }
+          done
+          n=$(grep -cx 'build' /tmp/swift-calls.log); echo "builds: $n"
+          [ "$n" = "10" ] || { echo "FAIL: expected 10 plain builds"; fail=1; }
+          if grep -q '^test' /tmp/swift-calls.log; then echo "FAIL: tests should not run"; fail=1; fi
+          if grep -qE '(^| )-v( |$)' /tmp/swift-calls.log; then echo "FAIL: verbose flag unexpected"; fail=1; fi
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
