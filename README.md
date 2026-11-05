@@ -1,0 +1,1 @@
+# Matejkob-swift-macro-compatibility-check
