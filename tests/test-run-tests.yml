@@ -1,0 +1,30 @@
+name: Test run-tests input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          cp tests/fixtures/fake-swift/swift "$RUNNER_TEMP/fakebin/swift"
+          chmod +x "$RUNNER_TEMP/fakebin/swift"
+          echo "$RUNNER_TEMP/fakebin" >> "$GITHUB_PATH"
+          echo "FAKE_SWIFT_LOG=$RUNNER_TEMP/swift-calls.log" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/swift-calls.log" "$RUNNER_TEMP/swift-calls.log.version"
+      - id: action
+        uses: .
+        with:
+          run-tests: 'true'
+      - name: Assert tests ran for every version
+        run: |
+          LOG="$FAKE_SWIFT_LOG"
+          echo "--- swift calls ---"; cat "$LOG"
+          BUILDS=$(grep -cx "swift build" "$LOG")
+          TESTS=$(grep -cx "swift test" "$LOG" || true)
+          echo "builds=$BUILDS tests=$TESTS"
+          [ "$BUILDS" = "11" ] || { echo "FAIL: expected 11 builds"; exit 1; }
+          [ "$TESTS" = "11" ] || { echo "FAIL: expected 11 'swift test' calls"; exit 1; }
+          echo "PASS"

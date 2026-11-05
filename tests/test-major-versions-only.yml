@@ -1,0 +1,33 @@
+name: Test major-versions-only input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          cp tests/fixtures/fake-swift/swift "$RUNNER_TEMP/fakebin/swift"
+          chmod +x "$RUNNER_TEMP/fakebin/swift"
+          echo "$RUNNER_TEMP/fakebin" >> "$GITHUB_PATH"
+          echo "FAKE_SWIFT_LOG=$RUNNER_TEMP/swift-calls.log" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/swift-calls.log" "$RUNNER_TEMP/swift-calls.log.version"
+      - id: action
+        uses: .
+        with:
+          major-versions-only: 'true'
+      - name: Assert only major versions checked
+        run: |
+          LOG="$FAKE_SWIFT_LOG"
+          echo "--- swift calls ---"; cat "$LOG"
+          ACTUAL=$(grep "^swift package resolve swift-syntax --version" "$LOG" | awk '{print $NF}' | tr '\n' ' ' | sed 's/ $//')
+          echo "resolved versions: $ACTUAL"
+          if [ "$ACTUAL" != "509.0.0 510.0.0 600.0.0" ]; then
+            echo "FAIL: expected '509.0.0 510.0.0 600.0.0'"; exit 1
+          fi
+          BUILDS=$(grep -cx "swift build" "$LOG")
+          [ "$BUILDS" = "3" ] || { echo "FAIL: expected 3 builds, got $BUILDS"; exit 1; }
+          if grep -q "^swift test" "$LOG"; then echo "FAIL: tests should not run"; exit 1; fi
+          echo "PASS"

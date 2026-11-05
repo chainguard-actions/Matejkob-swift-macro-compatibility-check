@@ -1,0 +1,42 @@
+#!/bin/bash
+# Fake `swift` CLI used by the tests. Records every invocation to
+# $FAKE_SWIFT_LOG (one line per call) and tracks the currently resolved
+# swift-syntax version so failures can be injected per version via:
+#   FAKE_SWIFT_FAIL_BUILD_VERSION=<version>
+#   FAKE_SWIFT_FAIL_TEST_VERSION=<version>
+#   FAKE_SWIFT_FAIL_RESOLVE_VERSION=<version>
+LOG="${FAKE_SWIFT_LOG:-/tmp/fake-swift.log}"
+STATE="${LOG}.version"
+echo "swift $*" >> "$LOG"
+
+case "$1" in
+  package)
+    if [ "$2" = "resolve" ] && [ "$3" = "swift-syntax" ] && [ "$4" = "--version" ]; then
+      if [ -n "$FAKE_SWIFT_FAIL_RESOLVE_VERSION" ] && [ "$5" = "$FAKE_SWIFT_FAIL_RESOLVE_VERSION" ]; then
+        echo "fake swift: resolve failed for $5" >&2
+        exit 1
+      fi
+      echo "$5" > "$STATE"
+    fi
+    exit 0
+    ;;
+  build)
+    current="$(cat "$STATE" 2>/dev/null)"
+    if [ -n "$FAKE_SWIFT_FAIL_BUILD_VERSION" ] && [ "$current" = "$FAKE_SWIFT_FAIL_BUILD_VERSION" ]; then
+      echo "fake swift: build failed for $current" >&2
+      exit 1
+    fi
+    echo "fake swift: build ok ($current)"
+    exit 0
+    ;;
+  test)
+    current="$(cat "$STATE" 2>/dev/null)"
+    if [ -n "$FAKE_SWIFT_FAIL_TEST_VERSION" ] && [ "$current" = "$FAKE_SWIFT_FAIL_TEST_VERSION" ]; then
+      echo "fake swift: tests failed for $current" >&2
+      exit 1
+    fi
+    echo "fake swift: tests ok ($current)"
+    exit 0
+    ;;
+esac
+exit 0

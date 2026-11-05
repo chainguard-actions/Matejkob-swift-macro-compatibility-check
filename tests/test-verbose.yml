@@ -1,0 +1,33 @@
+name: Test verbose input with run-tests
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          cp tests/fixtures/fake-swift/swift "$RUNNER_TEMP/fakebin/swift"
+          chmod +x "$RUNNER_TEMP/fakebin/swift"
+          echo "$RUNNER_TEMP/fakebin" >> "$GITHUB_PATH"
+          echo "FAKE_SWIFT_LOG=$RUNNER_TEMP/swift-calls.log" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/swift-calls.log" "$RUNNER_TEMP/swift-calls.log.version"
+      - id: action
+        uses: .
+        with:
+          verbose: 'true'
+          run-tests: 'true'
+          major-versions-only: 'true'
+      - name: Assert -v passed to build and test
+        run: |
+          LOG="$FAKE_SWIFT_LOG"
+          echo "--- swift calls ---"; cat "$LOG"
+          VB=$(grep -cx "swift build -v" "$LOG")
+          VT=$(grep -cx "swift test -v" "$LOG" || true)
+          echo "verbose builds=$VB verbose tests=$VT"
+          [ "$VB" = "3" ] || { echo "FAIL: expected 3 'swift build -v'"; exit 1; }
+          [ "$VT" = "3" ] || { echo "FAIL: expected 3 'swift test -v'"; exit 1; }
+          if grep -qx "swift build" "$LOG"; then echo "FAIL: non-verbose build found"; exit 1; fi
+          echo "PASS"

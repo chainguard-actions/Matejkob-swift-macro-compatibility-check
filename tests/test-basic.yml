@@ -1,0 +1,37 @@
+name: Test basic usage (defaults)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake swift CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          cp tests/fixtures/fake-swift/swift "$RUNNER_TEMP/fakebin/swift"
+          chmod +x "$RUNNER_TEMP/fakebin/swift"
+          echo "$RUNNER_TEMP/fakebin" >> "$GITHUB_PATH"
+          echo "FAKE_SWIFT_LOG=$RUNNER_TEMP/swift-calls.log" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/swift-calls.log" "$RUNNER_TEMP/swift-calls.log.version"
+      - id: action
+        uses: .
+      - name: Assert all versions built, no tests, no verbose
+        run: |
+          LOG="$FAKE_SWIFT_LOG"
+          echo "--- swift calls ---"; cat "$LOG"
+          for v in 509.0.0 509.0.1 509.0.2 509.1.0 509.1.1 510.0.0 510.0.1 510.0.2 510.0.3 600.0.0 600.0.1; do
+            if ! grep -qx "swift package resolve swift-syntax --version $v" "$LOG"; then
+              echo "FAIL: version $v was not resolved"; exit 1
+            fi
+          done
+          RESOLVES=$(grep -c "^swift package resolve swift-syntax --version" "$LOG")
+          BUILDS=$(grep -cx "swift build" "$LOG")
+          TESTS=$(grep -c "^swift test" "$LOG" || true)
+          echo "resolves=$RESOLVES builds=$BUILDS tests=$TESTS"
+          [ "$RESOLVES" = "11" ] || { echo "FAIL: expected 11 version resolves"; exit 1; }
+          [ "$BUILDS" = "11" ] || { echo "FAIL: expected 11 plain 'swift build' calls"; exit 1; }
+          [ "$TESTS" = "0" ] || { echo "FAIL: tests should not run by default"; exit 1; }
+          if grep -q -- " -v" "$LOG"; then echo "FAIL: verbose flag used by default"; exit 1; fi
+          if ! grep -qx "swift package resolve" "$LOG"; then echo "FAIL: initial resolve missing"; exit 1; fi
+          echo "PASS"
